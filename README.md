@@ -174,16 +174,16 @@ docker build -t venera-headless .
 1.  **准备配置文件目录**：
     ```bash
     # 在宿主机创建用于存放配置文件的目录
-    mkdir -p venera_config
+    mkdir -p venera_appdata
     # 将您的配置文件放入 venera_config 文件夹，可以全部复制过来
-    # cp /path/to/your/ ./venera_config/
+    # cp /path/to/your/ ./venera_appdata/.local/share/com.github.wgh136.venera/
     ```
 
 2.  **进入临时容器进行设置**：
     ```bash
     docker run -it --rm \
       -v "$(pwd)":/workspace \
-      -v "$(pwd)/venera_config":/root/.local/share/com.github.wgh136.venera \
+      -v "$(pwd)/venera_appdata":/root/ \
       venera-headless bash
     ```
 
@@ -210,9 +210,15 @@ docker build -t venera-headless .
 ```bash
 docker run -d -p 8000:8000 \
   -v "$(pwd)":/workspace \
-  -v "$(pwd)/venera_config":/root/.local/share/com.github.wgh136.venera \
+  -v "$(pwd)/venera_appdata":/root/ \
   --name venera-app --restart always \
   venera-headless ./start.sh
 ```
+
+关于为什么要挂载整个root目录：
+
+1.root目录下只有venera生成的.local和.cache
+
+2.venera在webdav同步的时候依赖rename函数，不能跨挂载点，如果分开挂载config和cache,就会导致同步文件失败。所以，需要挂载整个root家目录以保证webdav同步成功。
 
 现在，您的应用应该已经在 Docker 容器中成功运行，并且可以通过 `http://您的服务器IP:8000` 访问。要查看日志，可以使用 `docker logs -f venera-app`。
