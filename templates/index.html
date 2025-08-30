@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Venera 订阅更新</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Venera 订阅更新</h1>
+            <div class="header-controls">
+                <a href="/settings" class="settings-btn">设置</a>
+                <a href="/logout" class="logout-btn">退出登录</a>
+                <div class="update-section">
+                    <button id="update-btn" onclick="startUpdateProcess()">检查更新</button>
+                    <p>上次更新时间: <span id="last-updated">{{ comics_data.last_updated }}</span></p>
+                </div>
+            </div>
+        </header>
+
+        <div id="terminal" class="terminal-hidden"></div>
+
+        <main>
+            <section id="updated-comics-section">
+                <h2>最近更新</h2>
+                <div id="updated-comics-grid" class="comic-grid"></div>
+            </section>
+
+            <section id="all-comics-section">
+                <h2>所有收藏</h2>
+                <div id="all-comics-grid" class="comic-grid"></div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // --- WebSocket 和状态管理 ---
+        let ws;
+        const terminal = document.getElementById('terminal');
+        const updateBtn = document.getElementById('update-btn');
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            ws.onopen = () => console.log("WebSocket 连接已建立");
+            ws.onmessage = handleWebSocketMessage;
+            ws.onclose = (event) => {
+                console.log("WebSocket 连接已断开:", event);
+                // 如果连接因策略违规而关闭，则重定向到登录页面
+                if (event.code === 1008) {
+                    window.location.href = '/login';
+                } else {
+                    // 正常断开或网络问题，尝试重连
+                    setTimeout(connectWebSocket, 3000);
+                }
+            };
+            ws.onerror = (error) => console.error("WebSocket 错误:", error);
+        }
+
+        function handleWebSocketMessage(event) {
+            const msg = JSON.parse(event.data);
+            switch (msg.type) {
+                case 'current_state':
+                    rebuildTerminal(msg);
+                    break;
+                case 'task_start':
+                    terminal.classList.remove('terminal-hidden');
+                    createTaskElement(msg.taskId, msg.command, msg.flowId);
+                    break;
+                case 'log':
+                    appendLog(msg.taskId, msg.data, msg.parsed);
+                    break;
+                case 'task_end':
+                    markTaskAsComplete(msg.taskId);
+                    break;
+                case 'data_updated':
+                    updateBtn.disabled = false;
+                    updateBtn.textContent = '检查更新';
+                    setTimeout(() => {
+                        if (terminal.children.length === 0) {
+                            terminal.classList.add('terminal-hidden');
+                        }
+                    }, 2500);
+                    renderComics(msg.data);
+                    break;
+            }
+        }
+
+        function rebuildTerminal(state) {
+            let hasRunningTasks = false;
+            terminal.innerHTML = ''; // Clear before rebuilding
+
+            for (const flowId in state.flows) {
+                const flow = state.flows[flowId];
+                for (const taskId in flow.tasks) {
+                    const task = flow.tasks[taskId];
+                    // 只重建未完成的任务
+                    if (task.status !== 'complete') {
+                        hasRunningTasks = true;
+                        createTaskElement(task.taskId, task.command, flowId);
+                        const logsEl = document.getElementById(`task-${task.taskId}`).querySelector('.logs');
+                        logsEl.textContent = task.logs.join('\n') + '\n';
+                        logsEl.scrollTop = logsEl.scrollHeight;
+                        if (task.progress.total > 0) {
+                            updateProgressBar(task.taskId, task.progress.current, task.progress.total);
+                        }
+                    }
+                }
+            }
+
+            if (hasRunningTasks) {
+                updateBtn.disabled = true;
+                updateBtn.textContent = '更新中...';
+                terminal.classList.remove('terminal-hidden');
+            } else {
+                updateBtn.disabled = false;
+                updateBtn.textContent = '检查更新';
+                terminal.classList.add('terminal-hidden');
+            }
+        }
+
+        // --- UI 更新函数 ---
+        function createTaskElement(taskId, command, flowId) {
+            const taskEl = document.createElement('div');
+            taskEl.id = `task-${taskId}`;
+            taskEl.classList.add('task-container');
+            taskEl.innerHTML = `
+                <div class="task-header">
+                    <strong>命令:</strong> ${command} 
+                    <span class="task-status">(运行中)</span>
+                    <button class="cancel-btn" onclick="cancelUpdate('${flowId}')">强制终止</button>
+                </div>
+                <div class="progress-bar-container" style="display: none;"><div class="progress-bar"></div><span class="progress-text"></span></div>
+                <pre class="logs"></pre>`;
+            terminal.appendChild(taskEl);
+        }
+
+        function appendLog(taskId, rawLog, parsedData) {
+            const taskEl = document.getElementById(`task-${taskId}`);
+            if (!taskEl) return;
+            const logsEl = taskEl.querySelector('.logs');
+            logsEl.textContent += rawLog + '\n';
+            logsEl.scrollTop = logsEl.scrollHeight;
+            if (parsedData && parsedData.message === 'Progress' && parsedData.data) {
+                updateProgressBar(taskId, parsedData.data.current, parsedData.data.total);
+            }
+        }
+
+        function updateProgressBar(taskId, current, total) {
+            const taskEl = document.getElementById(`task-${taskId}`);
+            if (!taskEl || total === 0) return;
+            const container = taskEl.querySelector('.progress-bar-container');
+            const bar = taskEl.querySelector('.progress-bar');
+            const text = taskEl.querySelector('.progress-text');
+            container.style.display = 'flex';
+            bar.style.width = `${(current / total) * 100}%`;
+            text.textContent = `${current} / ${total}`;
+        }
+
+        function markTaskAsComplete(taskId) {
+            const taskEl = document.getElementById(`task-${taskId}`);
+            if (!taskEl) return;
+            taskEl.querySelector('.task-status').textContent = '(完成)';
+            taskEl.classList.add('task-complete');
+            setTimeout(() => {
+                taskEl.classList.add('task-disappearing');
+                setTimeout(() => taskEl.remove(), 300);
+            }, 2000);
+        }
+
+        function renderComics(data) {
+            document.getElementById('last-updated').textContent = data.last_updated;
+            document.getElementById('updated-comics-grid').innerHTML = data.updated_comics.map(createComicCard).join('');
+            document.getElementById('all-comics-grid').innerHTML = data.all_comics.map(createComicCard).join('');
+            formatUpdateTimes();
+            addAllCardClickListeners();
+        }
+
+        function createComicCard(comic) {
+            const previousFetchTime = comic.previousSuccessfulFetchTime || '';
+            const lastFetchTime = comic.lastSuccessfulFetchTime || '';
+            const updateFailed = comic.updateFailed || false;
+            const timeBubbleClass = `update-time-bubble ${updateFailed ? 'update-failed' : ''}`;
+            const cardDataAttrs = `data-comic-id="${comic.id}" data-comic-name="${comic.name}" data-comic-type="${comic.type}"`;
+
+            return `
+                <div class="comic-card" ${cardDataAttrs}>
+                    <img src="${comic.coverUrl}" alt="${comic.name}">
+                    <div class="comic-info">
+                        <h3>${comic.name}</h3>
+                        <p>${comic.author || ''}</p>
+                        <p class="${timeBubbleClass}" 
+                           data-updatetime="${comic.updateTime || ''}"
+                           data-previous-fetch-time="${previousFetchTime}"
+                           data-last-fetch-time="${lastFetchTime}"></p>
+                        <div class="tags">${(comic.tags || []).map(tag => `<span class="tag">${tag}</span>`).join('')}</div>
+                    </div>
+                </div>`;
+        }
+        
+        function formatUpdateTimes() {
+            document.querySelectorAll('.update-time-bubble').forEach(bubble => {
+                const updateTimeStr = bubble.dataset.updatetime;
+                const previousFetchTimeStr = bubble.dataset.previousFetchTime;
+                const lastFetchTimeStr = bubble.dataset.lastFetchTime;
+
+                let updateTimeText = '';
+                let previousFetchTimeText = '';
+                let lastFetchTimeText = '';
+                
+                if (updateTimeStr && updateTimeStr !== 'None') {
+                    try { updateTimeText = `更新于: ${new Date(updateTimeStr).toLocaleString()}`; } catch (e) {}
+                }
+                if (previousFetchTimeStr && previousFetchTimeStr !== 'None') {
+                    try { previousFetchTimeText = `上次正确更新于: ${new Date(previousFetchTimeStr).toLocaleString()}`; } catch (e) {}
+                }
+                if (lastFetchTimeStr && lastFetchTimeStr !== 'None') {
+                    try { lastFetchTimeText = `成功更新于: ${new Date(lastFetchTimeStr).toLocaleString()}`; } catch (e) {}
+                }
+
+                // 决定初始显示内容
+                if (updateTimeText) {
+                    bubble.textContent = updateTimeText;
+                } else if (lastFetchTimeText) {
+                    bubble.textContent = lastFetchTimeText;
+                } else if (previousFetchTimeText) {
+                    bubble.textContent = previousFetchTimeText;
+                } else {
+                    bubble.textContent = '从未更新';
+                }
+                bubble.style.display = 'inline-block';
+
+
+                // 如果有“上次正确获取时间”，则添加点击切换功能
+                if (previousFetchTimeText && updateTimeText) {
+                    let previousFetchTimeText = '';
+                    try {
+                        previousFetchTimeText = `上次正确更新于: ${new Date(previousFetchTimeStr).toLocaleString()}`;
+                    } catch (e) { /* 忽略无效日期 */ }
+
+                    if (previousFetchTimeText) {
+                        bubble.classList.add('clickable');
+                        bubble.setAttribute('data-showing', 'content-time'); 
+                        
+                        bubble.onclick = (event) => {
+                            event.stopPropagation(); // 阻止事件冒泡到父元素(comic-card)
+                            if (bubble.getAttribute('data-showing') === 'content-time') {
+                                bubble.textContent = previousFetchTimeText;
+                                bubble.setAttribute('data-showing', 'fetch-time');
+                            } else {
+                                bubble.textContent = updateTimeText;
+                                bubble.setAttribute('data-showing', 'content-time');
+                            }
+                        };
+                    }
+                }
+            });
+        }
+
+        function addAllCardClickListeners() {
+            document.querySelectorAll('.comic-card').forEach(card => {
+                card.style.cursor = 'pointer'; // 提示可点击
+                card.onclick = () => {
+                    const comicId = card.dataset.comicId;
+                    const comicName = card.dataset.comicName;
+                    const comicType = card.dataset.comicType;
+                    if (confirm(`是否为《${comicName}》检查更新？`)) {
+                        updateSingleComic(comicId, comicType);
+                    }
+                };
+            });
+        }
+
+        async function updateSingleComic(comicId, comicType) {
+            // 禁用按钮，防止重复点击
+            updateBtn.disabled = true;
+            updateBtn.textContent = '更新中...';
+            terminal.innerHTML = ''; // 清空终端
+
+            try {
+                const response = await fetch(`/update_single/${comicType}/${comicId}`, {
+                    method: 'POST'
+                });
+                if (response.status === 401 || response.redirected) {
+                    window.location.href = '/login';
+                } else if (!response.ok) {
+                    const errorData = await response.json();
+                    alert(`启动更新失败: ${errorData.detail || '请查看服务器日志。'}`);
+                    updateBtn.disabled = false;
+                    updateBtn.textContent = '检查更新';
+                }
+                // 成功启动后，WebSocket会处理后续状态，按钮状态由 onmessage 控制
+            } catch (error) {
+                console.error('单次更新请求出错:', error);
+                alert('更新请求出错，请检查网络连接。');
+                updateBtn.disabled = false;
+                updateBtn.textContent = '检查更新';
+            }
+        }
+
+        // --- 触发更新 ---
+        async function startUpdateProcess() {
+            updateBtn.disabled = true;
+            updateBtn.textContent = '更新中...';
+            terminal.innerHTML = '';
+
+            try {
+                const response = await fetch('/update', {
+                    method: 'POST'
+                });
+                if (response.status === 401 || response.redirected) {
+                    window.location.href = '/login';
+                } else if (!response.ok) {
+                    alert('启动更新失败，请查看服务器日志。');
+                    updateBtn.disabled = false;
+                    updateBtn.textContent = '检查更新';
+                }
+            } catch (error) {
+                console.error('更新请求出错:', error);
+                alert('更新请求出错，请检查网络连接。');
+                updateBtn.disabled = false;
+                updateBtn.textContent = '检查更新';
+            }
+        }
+
+        // --- 取消更新 ---
+        async function cancelUpdate(flowId) {
+            if (!confirm('确定要强制终止当前的更新流程吗？')) {
+                return;
+            }
+            try {
+                const response = await fetch(`/cancel_update/${flowId}`, {
+                    method: 'POST'
+                });
+                if (response.status === 401 || response.redirected) {
+                    window.location.href = '/login';
+                } else if (response.ok) {
+                    alert('已发送终止请求。');
+                } else {
+                    alert('发送终止请求失败。');
+                }
+            } catch (error) {
+                console.error('取消请求出错:', error);
+                alert('取消请求出错，请检查网络连接。');
+            }
+        }
+
+        // --- 初始化 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            connectWebSocket();
+            renderComics({{ comics_data | tojson }});
+        });
+    </script>
+</body>
+</html>

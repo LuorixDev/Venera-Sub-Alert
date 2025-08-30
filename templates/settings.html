@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置 - Venera 订阅更新</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .settings-container {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 30px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .settings-container h1 {
+            margin-bottom: 20px;
+        }
+        .settings-container input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .message {
+            margin-top: 15px;
+            display: none;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .message.success {
+            color: #2f855a;
+            background-color: #c6f6d5;
+        }
+        .message.error {
+            color: #e53e3e;
+            background-color: #fed7d7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="settings-container">
+            <h1>设置</h1>
+            
+            <!-- 修改密码表单 -->
+            <form id="password-form">
+                <h2>修改密码</h2>
+                <input type="password" id="current_password" placeholder="当前密码" required>
+                <input type="password" id="new_password" placeholder="新密码" required>
+                <button type="submit" class="update-section button">更新密码</button>
+            </form>
+            <p id="password-message" class="message"></p>
+
+            <hr style="margin: 40px 0;">
+
+            <!-- 邮件配置表单 -->
+            <form id="mail-form">
+                <h2>邮件通知配置</h2>
+                <input type="text" id="mail_server" placeholder="SMTP 服务器地址" required>
+                <input type="number" id="mail_port" placeholder="SMTP 端口" required>
+                <input type="email" id="mail_username" placeholder="发件人邮箱" required>
+                <input type="password" id="mail_password" placeholder="邮箱密码或应用密码 (留空表示不修改)" >
+                <input type="email" id="mail_recipient" placeholder="收件人邮箱" required>
+                <button type="submit" class="update-section button">保存邮件配置</button>
+            </form>
+            <p id="mail-message" class="message"></p>
+
+            <hr style="margin: 40px 0;">
+
+            <!-- 高级设置表单 -->
+            <form id="advanced-form">
+                <h2>高级设置</h2>
+                <label for="update_interval">自动更新间隔 (分钟)--更改需要重启应用才能生效</label>
+                <input type="number" id="update_interval" placeholder="例如: 60" required>
+                <label for="command_timeout">命令执行超时 (秒)</label>
+                <input type="number" id="command_timeout" placeholder="例如: 120" required>
+                <button type="submit" class="update-section button">保存高级设置</button>
+            </form>
+            <p id="advanced-message" class="message"></p>
+
+            <a href="/" style="margin-top: 20px; display: inline-block;">返回主页</a>
+        </div>
+    </div>
+
+    <script>
+        // --- 通用消息显示函数 ---
+        function showMessage(elementId, text, type) {
+            const messageEl = document.getElementById(elementId);
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+            messageEl.style.display = 'block';
+        }
+
+        // --- 密码表单逻辑 ---
+        document.getElementById('password-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('current_password', document.getElementById('current_password').value);
+            formData.append('new_password', document.getElementById('new_password').value);
+
+            try {
+                const response = await fetch('/settings/password', {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    showMessage('password-message', '密码更新成功！请重新登录。', 'success');
+                    setTimeout(() => window.location.href = '/login', 2000);
+                } else {
+                    showMessage('password-message', data.detail || '密码更新失败。', 'error');
+                }
+            } catch (error) {
+                showMessage('password-message', '发生网络错误。', 'error');
+            }
+        });
+
+        // --- 邮件表单逻辑 ---
+        async function loadMailSettings() {
+            try {
+                const response = await fetch('/settings/mail');
+                if (response.redirected) { window.location.href = response.url; return; }
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('mail_server').value = data.server || '';
+                    document.getElementById('mail_port').value = data.port || '';
+                    document.getElementById('mail_username').value = data.username || '';
+                    document.getElementById('mail_recipient').value = data.recipient || '';
+                    document.getElementById('mail_password').placeholder = data.password ? '•••••••• (留空表示不修改)' : '邮箱密码或应用密码';
+                }
+            } catch (error) {
+                console.error('加载邮件配置失败:', error);
+            }
+        }
+
+        document.getElementById('mail-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('mail_password').value;
+            const mailData = {
+                server: document.getElementById('mail_server').value,
+                port: parseInt(document.getElementById('mail_port').value),
+                username: document.getElementById('mail_username').value,
+                password: password || "••••••••",
+                recipient: document.getElementById('mail_recipient').value,
+            };
+
+            try {
+                const response = await fetch('/settings/mail', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(mailData)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    showMessage('mail-message', '邮件配置保存成功！', 'success');
+                } else {
+                    showMessage('mail-message', data.detail || '配置保存失败。', 'error');
+                }
+            } catch (error) {
+                showMessage('mail-message', '发生网络错误。', 'error');
+            }
+        });
+
+        // --- 高级设置表单逻辑 ---
+        async function loadAdvancedSettings() {
+            try {
+                const response = await fetch('/settings/advanced');
+                if (response.redirected) { window.location.href = response.url; return; }
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('update_interval').value = data.update_interval;
+                    document.getElementById('command_timeout').value = data.command_timeout;
+                }
+            } catch (error) {
+                console.error('加载高级配置失败:', error);
+            }
+        }
+
+        document.getElementById('advanced-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const advancedData = {
+                update_interval: parseInt(document.getElementById('update_interval').value),
+                command_timeout: parseInt(document.getElementById('command_timeout').value),
+            };
+
+            try {
+                const response = await fetch('/settings/advanced', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(advancedData)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    showMessage('advanced-message', '高级配置保存成功！', 'success');
+                } else {
+                    showMessage('advanced-message', data.detail || '配置保存失败。', 'error');
+                }
+            } catch (error) {
+                showMessage('advanced-message', '发生网络错误。', 'error');
+            }
+        });
+
+        // --- 初始化 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMailSettings();
+            loadAdvancedSettings();
+        });
+    </script>
+</body>
+</html>

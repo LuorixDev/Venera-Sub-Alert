@@ -1,0 +1,267 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f4f4f9;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+}
+
+/* --- 终端样式 --- */
+#terminal {
+    background-color: #1a202c; /* 更深的背景 */
+    color: #cbd5e0;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 1px solid #4a5568;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 14px;
+    transition: opacity 0.5s, transform 0.5s;
+    transform: translateY(-10px);
+    opacity: 1;
+}
+
+.terminal-hidden {
+    display: none;
+}
+
+.task-container {
+    background-color: #2d3748;
+    border: 1px solid #4a5568;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    padding: 15px;
+    transition: all 0.3s ease-in-out;
+}
+
+.task-container.task-complete {
+    border-color: #38a169;
+    background-color: #2f4439; /* 完成时的绿色背景 */
+}
+
+.task-container.task-disappearing {
+    opacity: 0;
+    transform: scale(0.95);
+    height: 0;
+    padding: 0;
+    margin: 0;
+    border: none;
+}
+
+.task-header {
+    margin-bottom: 10px;
+}
+
+.task-status {
+    font-style: italic;
+}
+
+.task-container.task-complete .task-status {
+    color: #38a169;
+}
+
+.logs {
+    background-color: #1a202c;
+    padding: 10px;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.progress-bar-container {
+    width: 100%;
+    background-color: #4a5568;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.progress-bar {
+    width: 0%;
+    height: 20px;
+    background-color: #4299e1;
+    border-radius: 4px;
+    transition: width 0.2s ease-in-out;
+}
+
+.progress-text {
+    margin-left: 10px;
+    color: #e2e8f0;
+    font-size: 12px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.settings-btn {
+    display: inline-block;
+    padding: 8px 16px;
+    background-color: #667eea;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+
+.settings-btn:hover {
+    background-color: #5a67d8;
+}
+
+.logout-btn {
+    display: inline-block;
+    padding: 8px 16px;
+    background-color: #e53e3e; /* 红色背景 */
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+
+.logout-btn:hover {
+    background-color: #c53030; /* 深红色 */
+}
+
+h1 {
+    color: #5a67d8;
+}
+
+.update-section button {
+    background-color: #5a67d8;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+.update-section button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.update-section button:hover:not(:disabled) {
+    background-color: #434190;
+}
+
+.update-section p {
+    font-size: 14px;
+    color: #666;
+    margin-top: 10px;
+}
+
+h2 {
+    color: #333;
+    border-bottom: 2px solid #5a67d8;
+    padding-bottom: 10px;
+    margin-top: 40px;
+}
+
+.comic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+}
+
+.comic-card {
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+
+.comic-card:hover {
+    transform: translateY(-5px);
+}
+
+.comic-card img {
+    width: 100%;
+    height: 250px;
+    object-fit: cover;
+}
+
+.comic-card .comic-info {
+    padding: 15px;
+}
+
+.comic-card h3 {
+    font-size: 16px;
+    margin: 0 0 5px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.comic-card p {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
+
+.update-time-bubble {
+    background-color: #c6f6d5;
+    color: #2f855a;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    margin: 10px 0;
+    display: inline-block;
+}
+
+.tags {
+    margin-top: 10px;
+    max-height: 85px; /* 约 4 行的高度 */
+    overflow-y: auto;
+}
+
+.tag {
+    display: inline-block;
+    background-color: #e2e8f0;
+    color: #4a5568;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    margin-right: 5px;
+    margin-bottom: 5px;
+}
+
+.update-time-bubble.clickable {
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.update-time-bubble.clickable:hover {
+    background-color: #b2f5ea; /* 悬停时变为更亮的颜色 */
+}
+
+.update-time-bubble.update-failed {
+    background-color: #faf089; /* 黄色背景 */
+    color: #744210; /* 深色文字以保证可读性 */
+}
