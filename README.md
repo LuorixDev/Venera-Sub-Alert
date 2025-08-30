@@ -1,6 +1,6 @@
 # Venera 订阅提醒与 Web UI
 
-这是一个为 [Venera](https://github.com/Scighost/Venera) 漫画阅读器设计的 Web 应用，旨在提供一个现代、易用的网页界面来管理和监控您的漫画订阅，并通过邮件发送更新通知。
+这是一个为 [Venera](https://github.com/venera-app/venera) 漫画阅读器设计的 Web 应用，旨在提供一个现代、易用的网页界面来管理和监控您的漫画订阅，并通过邮件发送更新通知。
 
 ## 项目简介
 
