@@ -92,7 +92,7 @@ cp .env.example .env
 1.  在您的**本地电脑**上，进入 Venera 的 `设置` -> `应用`。
 2.  在“本地漫画存储地址”选项中，点击“复制路径”。
 3.  打开您的文件管理器，粘贴刚刚复制的路径。然后，**返回上一级目录**。您现在应该能看到 Venera 的所有配置文件（例如 `appdata.json` 等文件）。
-4.  将这个`appdata.json`上传到您的服务器，并覆盖远程服务器venera的配置文件（应该在`~/.local/share/com.github.wgh136.venera/`文件夹下。（如果没有，可能需要服务器先启动一次venera,你也可以选择复制完整的文件夹到服务器的这个目录）
+4.  将这个整个文件夹上传到您的服务器，并覆盖远程服务器venera的配置文件（应该在`~/.local/share/com.github.wgh136.venera/`文件夹下。（如果没有，可能需要服务器先启动一次venera,你也可以选择复制完整的文件夹到服务器的这个目录）
 
 ### 步骤 6：恢复本地代理设置
 
@@ -115,3 +115,81 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 5.  （可选）您也可以在这里修改登录密码。
 
 至此，所有配置已完成！应用现在将根据您设定的时间间隔，在后台自动为您检查漫画更新。
+
+## 在无桌面环境的 Linux 中运行（使用 Docker）
+
+为了在没有图形界面的 Linux 服务器上运行，您需要构建一个 Docker 容器来提供必要的环境。
+
+### 步骤 1：创建 Dockerfile
+
+在项目根目录下创建一个名为 `Dockerfile` 的文件，内容如下，镜像比较大，大约1164MB：
+
+```Dockerfile
+# 使用 Ubuntu 24.04 LTS
+FROM ubuntu:24.04
+
+# 非交互模式
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 使用国内镜像源加速 apt
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' /etc/apt/sources.list \
+ && sed -i 's|http://security.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' /etc/apt/sources.list
+
+# 更新 apt 并安装基础工具、Python3、GTK3/WebKitGTK
+RUN apt-get update && apt-get install -y \
+    python3 python3-venv python3-dev \
+    build-essential \
+    libgtk-3-dev libglib2.0-dev libpango1.0-dev libcairo2-dev \
+    libwebkit2gtk-4.1-0 libwebkit2gtk-4.1-dev \
+    xvfb wget curl ca-certificates sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# 创建挂载目录
+RUN mkdir -p /workspace
+WORKDIR /workspace
+
+# 默认启动命令
+CMD ["bash"]
+```
+
+### 步骤 2：构建并运行 Docker 容器
+
+1.  **构建镜像**：在项目根目录下执行以下命令：
+    ```bash
+    docker build -t venera-headless .
+    ```
+
+2.  **启动容器**：使用以下命令启动容器。该命令会将当前项目目录挂载到容器的 `/workspace`，并将 Venera 的配置文件目录挂载到本地的 `venera_config` 文件夹，方便您替换配置并持久化。
+
+    ```bash
+    # 在宿主机创建用于存放配置文件的目录
+    mkdir -p venera_config
+    
+    # 将您的 appdata.json 等配置文件放入 venera_config 文件夹
+    # cp /path/to/your/appdata.json ./venera_config/
+
+    # 启动容器
+    docker run -it -p 8000:8000 \
+      -v "$(pwd)":/workspace \
+      -v "$(pwd)/venera_config":/root/.local/share/com.github.wgh136.venera \
+      --name venera-app venera-headless
+    ```
+
+    **注意**：在启动容器前，请确保您已按照“步骤 5：迁移 Venera 配置文件”的指引，将您的 `appdata.json` 等配置文件放置在项目根目录下的 `venera_config` 文件夹中。这样，容器内的 Venera 才能读取到正确的配置。
+
+### 步骤 3：在容器内启动应用
+
+进入容器后，您需要执行以下命令来启动 Xvfb（一个虚拟的 X server）和 Web 应用。
+
+```bash
+# 启动虚拟桌面环境并在后台运行
+Xvfb :99 -screen 0 1920x1080x24 &
+
+# 设置 DISPLAY 环境变量，让应用知道在哪里显示图形界面
+export DISPLAY=:99
+
+# 启动应用 (假设您已按照之前的指南创建了虚拟环境)
+./.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+现在，您的应用应该已经在 Docker 容器中成功运行，并且可以通过 `http://您的服务器IP:8000` 访问。
