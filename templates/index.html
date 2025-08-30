@@ -15,7 +15,7 @@
                 <a href="/logout" class="logout-btn">退出登录</a>
                 <div class="update-section">
                     <button id="update-btn" onclick="startUpdateProcess()">检查更新</button>
-                    <p>上次更新时间: <span id="last-updated">{{ comics_data.last_updated }}</span></p>
+                    <p>上次更新时间: <span id="last-updated"></span></p>
                 </div>
             </div>
         </header>
@@ -172,7 +172,17 @@
         }
 
         function renderComics(data) {
-            document.getElementById('last-updated').textContent = data.last_updated;
+            const lastUpdatedEl = document.getElementById('last-updated');
+            if (data.last_updated && data.last_updated !== 'None') {
+                try {
+                    // 将 UTC 时间字符串转换为本地时间格式
+                    lastUpdatedEl.textContent = new Date(data.last_updated).toLocaleString();
+                } catch (e) {
+                    lastUpdatedEl.textContent = data.last_updated; // 解析失败则回退到原始字符串
+                }
+            } else {
+                lastUpdatedEl.textContent = '从未';
+            }
             document.getElementById('updated-comics-grid').innerHTML = data.updated_comics.map(createComicCard).join('');
             document.getElementById('all-comics-grid').innerHTML = data.all_comics.map(createComicCard).join('');
             formatUpdateTimes();
@@ -210,16 +220,32 @@
                 let updateTimeText = '';
                 let previousFetchTimeText = '';
                 let lastFetchTimeText = '';
+
+                const toLocale = (dateStr, options = {}) => {
+                    if (!dateStr || dateStr === 'None') return '';
+                    try {
+                        const date = new Date(dateStr + ' UTC');
+                        return date.toLocaleString(undefined, options);
+                    } catch (e) {
+                        return '';
+                    }
+                };
                 
-                if (updateTimeStr && updateTimeStr !== 'None') {
-                    try { updateTimeText = `更新于: ${new Date(updateTimeStr).toLocaleString()}`; } catch (e) {}
+                const formattedUpdateTime = toLocale(updateTimeStr, { year: 'numeric', month: 'numeric', day: 'numeric' });
+                if (formattedUpdateTime) {
+                    updateTimeText = `更新于: ${formattedUpdateTime}`;
                 }
-                if (previousFetchTimeStr && previousFetchTimeStr !== 'None') {
-                    try { previousFetchTimeText = `上次正确更新于: ${new Date(previousFetchTimeStr).toLocaleString()}`; } catch (e) {}
+                
+                const formattedPrevFetchTime = toLocale(previousFetchTimeStr);
+                if (formattedPrevFetchTime) {
+                    previousFetchTimeText = `上次正确更新于: ${formattedPrevFetchTime}`;
                 }
-                if (lastFetchTimeStr && lastFetchTimeStr !== 'None') {
-                    try { lastFetchTimeText = `成功更新于: ${new Date(lastFetchTimeStr).toLocaleString()}`; } catch (e) {}
+
+                const formattedLastFetchTime = toLocale(lastFetchTimeStr);
+                if (formattedLastFetchTime) {
+                    lastFetchTimeText = `成功更新于: ${formattedLastFetchTime}`;
                 }
+                
 
                 // 决定初始显示内容
                 if (updateTimeText) {
@@ -236,26 +262,19 @@
 
                 // 如果有“上次正确获取时间”，则添加点击切换功能
                 if (previousFetchTimeText && updateTimeText) {
-                    let previousFetchTimeText = '';
-                    try {
-                        previousFetchTimeText = `上次正确更新于: ${new Date(previousFetchTimeStr).toLocaleString()}`;
-                    } catch (e) { /* 忽略无效日期 */ }
-
-                    if (previousFetchTimeText) {
-                        bubble.classList.add('clickable');
-                        bubble.setAttribute('data-showing', 'content-time'); 
-                        
-                        bubble.onclick = (event) => {
-                            event.stopPropagation(); // 阻止事件冒泡到父元素(comic-card)
-                            if (bubble.getAttribute('data-showing') === 'content-time') {
-                                bubble.textContent = previousFetchTimeText;
-                                bubble.setAttribute('data-showing', 'fetch-time');
-                            } else {
-                                bubble.textContent = updateTimeText;
-                                bubble.setAttribute('data-showing', 'content-time');
-                            }
-                        };
-                    }
+                    bubble.classList.add('clickable');
+                    bubble.setAttribute('data-showing', 'content-time'); 
+                    
+                    bubble.onclick = (event) => {
+                        event.stopPropagation(); // 阻止事件冒泡到父元素(comic-card)
+                        if (bubble.getAttribute('data-showing') === 'content-time') {
+                            bubble.textContent = previousFetchTimeText;
+                            bubble.setAttribute('data-showing', 'fetch-time');
+                        } else {
+                            bubble.textContent = updateTimeText;
+                            bubble.setAttribute('data-showing', 'content-time');
+                        }
+                    };
                 }
             });
         }
