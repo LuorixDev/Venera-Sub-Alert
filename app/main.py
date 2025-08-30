@@ -79,6 +79,9 @@ app.add_middleware(
 app.include_router(routers.router)
 
 # --- 静态文件 ---
+# 在挂载前确保目录存在
+os.makedirs("static", exist_ok=True)
+os.makedirs("cache", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/cache", StaticFiles(directory="cache"), name="cache")
 
