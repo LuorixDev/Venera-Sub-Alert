@@ -152,44 +152,67 @@ WORKDIR /workspace
 CMD ["bash"]
 ```
 
-### 步骤 2：构建并运行 Docker 容器
+### 步骤 2：准备启动脚本
 
-1.  **构建镜像**：在项目根目录下执行以下命令：
-    ```bash
-    docker build -t venera-headless .
-    ```
+本项目包含一个 `start.sh` 启动脚本，用于在 Docker 容器内启动应用。在继续之前，请确保该脚本具有执行权限：
 
-2.  **启动容器**：使用以下命令启动容器。该命令会将当前项目目录挂载到容器的 `/workspace`，并将 Venera 的配置文件目录挂载到本地的 `venera_config` 文件夹，方便您替换配置并持久化。
+```bash
+chmod +x start.sh
+```
 
+### 步骤 3：构建 Docker 镜像
+
+在项目根目录下执行以下命令：
+```bash
+docker build -t venera-headless .
+```
+
+### 步骤 4：首次安装与配置
+
+如果您是第一次运行，需要先进入一个临时的容器来完成项目初始化（例如克隆代码、安装依赖包）。
+
+1.  **准备配置文件目录**：
     ```bash
     # 在宿主机创建用于存放配置文件的目录
     mkdir -p venera_config
-    
-    # 将您的 appdata.json 等配置文件放入 venera_config 文件夹
-    # cp /path/to/your/appdata.json ./venera_config/
-
-    # 启动容器
-    docker run -it -p 8000:8000 \
-      -v "$(pwd)":/workspace \
-      -v "$(pwd)/venera_config":/root/.local/share/com.github.wgh136.venera \
-      --name venera-app venera-headless
+    # 将您的配置文件放入 venera_config 文件夹，可以全部复制过来
+    # cp /path/to/your/ ./venera_config/
     ```
 
-    **注意**：在启动容器前，请确保您已按照“步骤 5：迁移 Venera 配置文件”的指引，将您的 `appdata.json` 等配置文件放置在项目根目录下的 `venera_config` 文件夹中。这样，容器内的 Venera 才能读取到正确的配置。
+2.  **进入临时容器进行设置**：
+    ```bash
+    docker run -it --rm \
+      -v "$(pwd)":/workspace \
+      -v "$(pwd)/venera_config":/root/.local/share/com.github.wgh136.venera \
+      venera-headless bash
+    ```
 
-### 步骤 3：在容器内启动应用
+3.  **在容器内执行初始化**：
+    ```bash
+    # (如果宿主机当前目录没有代码) 克隆仓库代码
+    # git clone https://github.com/LuorixDev/Venera-Sub-Alert.git .
 
-进入容器后，您需要执行以下命令来启动 Xvfb（一个虚拟的 X server）和 Web 应用。
+    # 创建 Python 虚拟环境
+    python3 -m venv .venv
+
+    # 激活虚拟环境并安装依赖
+    source .venv/bin/activate
+    pip install -r requirements.txt
+
+    # 完成后退出容器
+    exit
+    ```
+
+### 步骤 5：启动应用
+
+完成首次配置后，您可以随时使用以下命令在后台启动应用：
 
 ```bash
-# 启动虚拟桌面环境并在后台运行
-Xvfb :99 -screen 0 1920x1080x24 &
-
-# 设置 DISPLAY 环境变量，让应用知道在哪里显示图形界面
-export DISPLAY=:99
-
-# 启动应用 (假设您已按照之前的指南创建了虚拟环境)
-./.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+docker run -d -p 8000:8000 \
+  -v "$(pwd)":/workspace \
+  -v "$(pwd)/venera_config":/root/.local/share/com.github.wgh136.venera \
+  --name venera-app --restart always \
+  venera-headless ./start.sh
 ```
 
-现在，您的应用应该已经在 Docker 容器中成功运行，并且可以通过 `http://您的服务器IP:8000` 访问。
+现在，您的应用应该已经在 Docker 容器中成功运行，并且可以通过 `http://您的服务器IP:8000` 访问。要查看日志，可以使用 `docker logs -f venera-app`。
