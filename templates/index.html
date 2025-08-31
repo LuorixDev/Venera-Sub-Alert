@@ -40,6 +40,7 @@
         let ws;
         const terminal = document.getElementById('terminal');
         const updateBtn = document.getElementById('update-btn');
+        const taskTimers = {}; // 用于存储任务计时器
 
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -68,7 +69,7 @@
                     break;
                 case 'task_start':
                     terminal.classList.remove('terminal-hidden');
-                    createTaskElement(msg.taskId, msg.command, msg.flowId);
+                    createTaskElement(msg.taskId, msg.command, msg.flowId, msg.start_time);
                     break;
                 case 'log':
                     appendLog(msg.taskId, msg.data, msg.parsed);
@@ -100,7 +101,7 @@
                     // 只重建未完成的任务
                     if (task.status !== 'complete') {
                         hasRunningTasks = true;
-                        createTaskElement(task.taskId, task.command, flowId);
+                        createTaskElement(task.taskId, task.command, flowId, task.start_time);
                         const logsEl = document.getElementById(`task-${task.taskId}`).querySelector('.logs');
                         logsEl.textContent = task.logs.join('\n') + '\n';
                         logsEl.scrollTop = logsEl.scrollHeight;
@@ -123,12 +124,13 @@
         }
 
         // --- UI 更新函数 ---
-        function createTaskElement(taskId, command, flowId) {
+        function createTaskElement(taskId, command, flowId, startTime) {
             const taskEl = document.createElement('div');
             taskEl.id = `task-${taskId}`;
             taskEl.classList.add('task-container');
             taskEl.innerHTML = `
                 <div class="task-header">
+                    <span class="timer">0s</span>
                     <strong>命令:</strong> ${command} 
                     <span class="task-status">(运行中)</span>
                     <button class="cancel-btn" onclick="cancelUpdate('${flowId}')">强制终止</button>
@@ -136,6 +138,14 @@
                 <div class="progress-bar-container" style="display: none;"><div class="progress-bar"></div><span class="progress-text"></span></div>
                 <pre class="logs"></pre>`;
             terminal.appendChild(taskEl);
+
+            if (startTime) {
+                const timerEl = taskEl.querySelector('.timer');
+                taskTimers[taskId] = setInterval(() => {
+                    const elapsed = Math.round(Date.now() / 1000 - startTime);
+                    timerEl.textContent = `${elapsed}s`;
+                }, 1000);
+            }
         }
 
         function appendLog(taskId, rawLog, parsedData) {
@@ -161,6 +171,10 @@
         }
 
         function markTaskAsComplete(taskId) {
+            if (taskTimers[taskId]) {
+                clearInterval(taskTimers[taskId]);
+                delete taskTimers[taskId];
+            }
             const taskEl = document.getElementById(`task-${taskId}`);
             if (!taskEl) return;
             taskEl.querySelector('.task-status').textContent = '(完成)';
@@ -176,7 +190,8 @@
             if (data.last_updated && data.last_updated !== 'None') {
                 try {
                     // 将 UTC 时间字符串转换为本地时间格式
-                    lastUpdatedEl.textContent = new Date(data.last_updated).toLocaleString();
+                    const date = new Date(data.last_updated + ' UTC');
+                    lastUpdatedEl.textContent = date.toLocaleString();
                 } catch (e) {
                     lastUpdatedEl.textContent = data.last_updated; // 解析失败则回退到原始字符串
                 }
@@ -193,8 +208,10 @@
             const previousFetchTime = comic.previousSuccessfulFetchTime || '';
             const lastFetchTime = comic.lastSuccessfulFetchTime || '';
             const updateFailed = comic.updateFailed || false;
+            const failureCount = comic.failure_count || 0;
             const timeBubbleClass = `update-time-bubble ${updateFailed ? 'update-failed' : ''}`;
             const cardDataAttrs = `data-comic-id="${comic.id}" data-comic-name="${comic.name}" data-comic-type="${comic.type}"`;
+            const failureTag = updateFailed && failureCount > 0 ? `<span class="failure-tag">失败 ${failureCount}次</span>` : '';
 
             return `
                 <div class="comic-card" ${cardDataAttrs}>
@@ -206,6 +223,7 @@
                            data-updatetime="${comic.updateTime || ''}"
                            data-previous-fetch-time="${previousFetchTime}"
                            data-last-fetch-time="${lastFetchTime}"></p>
+                        ${failureTag}
                         <div class="tags">${(comic.tags || []).map(tag => `<span class="tag">${tag}</span>`).join('')}</div>
                     </div>
                 </div>`;
@@ -267,12 +285,16 @@
                     
                     bubble.onclick = (event) => {
                         event.stopPropagation(); // 阻止事件冒泡到父元素(comic-card)
+                        const isFailed = bubble.classList.contains('update-failed');
                         if (bubble.getAttribute('data-showing') === 'content-time') {
                             bubble.textContent = previousFetchTimeText;
                             bubble.setAttribute('data-showing', 'fetch-time');
                         } else {
                             bubble.textContent = updateTimeText;
                             bubble.setAttribute('data-showing', 'content-time');
+                        }
+                        if (isFailed) {
+                            bubble.classList.add('update-failed');
                         }
                     };
                 }

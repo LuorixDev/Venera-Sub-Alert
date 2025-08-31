@@ -31,7 +31,8 @@ async def login(password: str = Form(...)):
     
     # 创建重定向响应，并设置会话 cookie
     response = RedirectResponse(url="/", status_code=303)
-    response.set_cookie(key="session", value="user", httponly=True)
+    # 设置 cookie 过期时间为 7 天
+    response.set_cookie(key="session", value="user", httponly=True, max_age=60 * 60 * 24 * 7)
     return response
 
 # 退出登录

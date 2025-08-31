@@ -1,5 +1,6 @@
 import json
 import asyncio
+import time
 from collections import OrderedDict
 
 from app.websocket import manager
@@ -37,6 +38,7 @@ async def start_task(flow_id: str, task_id: str, command: str):
             "taskId": task_id,
             "command": command,
             "status": "running",
+            "start_time": time.time(),
             "logs": [],
             "progress": {"current": 0, "total": 0}
         }

@@ -16,7 +16,7 @@ body {
     border: 1px solid #4a5568;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-    font-size: 14px;
+    font-size: 0.875rem;
     transition: opacity 0.5s, transform 0.5s;
     transform: translateY(-10px);
     opacity: 1;
@@ -51,6 +51,18 @@ body {
 
 .task-header {
     margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.timer {
+    background-color: #4a5568;
+    color: #e2e8f0;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
 }
 
 .task-status {
@@ -264,4 +276,14 @@ h2 {
 .update-time-bubble.update-failed {
     background-color: #faf089; /* 黄色背景 */
     color: #744210; /* 深色文字以保证可读性 */
+}
+
+.failure-tag {
+    display: inline-block;
+    background-color: #fed7d7;
+    color: #9b2c2c;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    margin-left: 5px;
 }

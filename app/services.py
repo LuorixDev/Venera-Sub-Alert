@@ -172,64 +172,64 @@ async def send_email_notification(comic: dict):
 
 async def run_venera_command_streamed(command: str, flow_id: str, task_id: str, executable_path: str):
     await state.start_task(flow_id, task_id, command)
-
     full_command = f"{executable_path} --headless {command}"
-
+    process = None
     try:
-        process = await asyncio.wait_for(
-            asyncio.create_subprocess_shell(
+        async def _run_and_stream():
+            nonlocal process
+            process = await asyncio.create_subprocess_shell(
                 full_command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            ),
+            )
+            json_prefix = "[CLI PRINT] "
+            final_json_output = []
+            while process.returncode is None:
+                if state.is_flow_cancelled(flow_id):
+                    process.terminate()
+                    await process.wait()
+                    await state.add_log(flow_id, task_id, "任务被用户强制终止。", None)
+                    break
+                try:
+                    line_bytes = await asyncio.wait_for(process.stdout.readline(), timeout=1.0)
+                    if not line_bytes:
+                        await asyncio.sleep(0.1)
+                        continue
+                    line = line_bytes.decode().strip()
+                    parsed_json = None
+                    if line.startswith(json_prefix):
+                        try:
+                            json_str = line[len(json_prefix):]
+                            parsed_json = json.loads(json_str)
+                            final_json_output.append(parsed_json)
+                        except json.JSONDecodeError:
+                            pass
+                    await state.add_log(flow_id, task_id, line, parsed_json)
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    print(f"读取进程输出时出错: {e}")
+                    break
+            await process.wait()
+            return final_json_output
+
+        final_output = await asyncio.wait_for(
+            _run_and_stream(),
             timeout=config.COMMAND_TIMEOUT_SECONDS
         )
+        await state.end_task(flow_id, task_id)
+        return final_output
+
     except asyncio.TimeoutError:
+        if process:
+            process.terminate()
+            await process.wait()
         await state.add_log(flow_id, task_id, f"命令执行超时 ({config.COMMAND_TIMEOUT_SECONDS}秒)，任务被强制终止。", None)
         await state.end_task(flow_id, task_id)
         return []
-
-    json_prefix = "[CLI PRINT] "
-    final_json_output = []
-
-    # 循环读取输出，直到进程结束
-    while process.returncode is None:
-        # 检查是否需要取消
-        if state.is_flow_cancelled(flow_id):
-            process.terminate()
-            await process.wait()  # 等待进程完全终止
-            await state.add_log(flow_id, task_id, "任务被用户强制终止。", None)
-            break
-
-        try:
-            # 带超时读取一行输出
-            line_bytes = await asyncio.wait_for(process.stdout.readline(), timeout=1.0)
-            if not line_bytes:
-                # 如果读到空字节，可能意味着进程已结束
-                await asyncio.sleep(0.1)
-                continue
-
-            line = line_bytes.decode().strip()
-
-            parsed_json = None
-            if line.startswith(json_prefix):
-                try:
-                    json_str = line[len(json_prefix):]
-                    parsed_json = json.loads(json_str)
-                    final_json_output.append(parsed_json)
-                except json.JSONDecodeError:
-                    pass
-
-            await state.add_log(flow_id, task_id, line, parsed_json)
-
-        except asyncio.TimeoutError:
-            # 读取超时是正常的，继续循环以检查取消状态
-            continue
-        except Exception as e:
-            print(f"读取进程输出时出错: {e}")
-            break
-
-    await process.wait()
-    await state.end_task(flow_id, task_id)
-    return final_json_output
+    except Exception as e:
+        print(f"执行命令时发生未知错误: {e}")
+        await state.add_log(flow_id, task_id, f"执行命令时发生未知错误: {e}", None)
+        await state.end_task(flow_id, task_id)
+        return []
 
 
 async def cache_image(url: str):
@@ -291,16 +291,31 @@ async def run_update_flow():
         return dt
 
     # --- 整合新旧数据，并标记失败的条目 ---
+    if not all_comics_set and old_comics_map:
+        print("警告: 'updatesubscribe' 未返回任何漫画数据，但之前存在数据。可能发生了错误，跳过本次数据更新。")
+        # 标记所有漫画为更新失败
+        for comic in old_comics_map.values():
+            comic['updateFailed'] = True
+            comic['failure_count'] = comic.get('failure_count', 0) + 1
+        comics_data = old_data
+        comics_data['all_comics'] = list(old_comics_map.values())
+        save_data(comics_data)
+        await manager.broadcast(json.dumps({"type": "data_updated", "data": comics_data}))
+        await state.end_flow(flow_id)
+        return
+
     final_all_comics_list = []
     for comic_id, old_comic in old_comics_map.items():
         if comic_id in all_comics_set:
             # 本次成功更新
             new_comic = all_comics_set[comic_id]
-            new_comic['updateFailed'] = False  # 明确标记成功
+            new_comic['updateFailed'] = False
+            new_comic['failure_count'] = 0
             final_all_comics_list.append(new_comic)
         else:
             # 本次更新失败，保留旧数据并标记
             old_comic['updateFailed'] = True
+            old_comic['failure_count'] = old_comic.get('failure_count', 0) + 1
             final_all_comics_list.append(old_comic)
 
     # 处理本次新添加的漫画
@@ -316,7 +331,7 @@ async def run_update_flow():
                             in updated_comics_ids], key=sort_key, reverse=True)
 
     newly_updated_for_email = []
-    current_fetch_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    current_fetch_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     async def process_comics(comics, fetch_time: str):
         tasks = [cache_image(c.get("coverUrl")) for c in comics]
@@ -348,7 +363,7 @@ async def run_update_flow():
     # 注意：现在 all_comics 已经包含了所有条目（成功和失败的）
     comics_data["all_comics"] = await process_comics(all_comics, current_fetch_time)
     comics_data["updated_comics"] = await process_comics(updated_comics, current_fetch_time)
-    comics_data["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    comics_data["last_updated"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     save_data(comics_data)
 
     # webdav up 可能会失败，但不应阻塞邮件发送
@@ -393,9 +408,10 @@ async def run_single_update_flow(comic_id: str, comic_type: str):
                 # --- 更新成功 ---
                 old_comic = comic
                 updated_comic_data['updateFailed'] = False
+                updated_comic_data['failure_count'] = 0
                 if 'lastSuccessfulFetchTime' in old_comic:
                     updated_comic_data['previousSuccessfulFetchTime'] = old_comic['lastSuccessfulFetchTime']
-                updated_comic_data['lastSuccessfulFetchTime'] = datetime.now().strftime(
+                updated_comic_data['lastSuccessfulFetchTime'] = datetime.utcnow().strftime(
                     "%Y-%m-%d %H:%M:%S")
 
                 cached_url = await cache_image(updated_comic_data.get("coverUrl"))
@@ -406,6 +422,7 @@ async def run_single_update_flow(comic_id: str, comic_type: str):
             else:
                 # --- 更新失败 ---
                 comics_data["all_comics"][i]['updateFailed'] = True
+                comics_data["all_comics"][i]['failure_count'] = comic.get('failure_count', 0) + 1
 
             found = True
             break
@@ -413,7 +430,8 @@ async def run_single_update_flow(comic_id: str, comic_type: str):
     # 如果是全新的漫画并且更新成功
     if not found and updated_comic_data:
         updated_comic_data['updateFailed'] = False
-        updated_comic_data['lastSuccessfulFetchTime'] = datetime.now().strftime(
+        updated_comic_data['failure_count'] = 0
+        updated_comic_data['lastSuccessfulFetchTime'] = datetime.utcnow().strftime(
             "%Y-%m-%d %H:%M:%S")
         cached_url = await cache_image(updated_comic_data.get("coverUrl"))
         if cached_url:
@@ -421,7 +439,7 @@ async def run_single_update_flow(comic_id: str, comic_type: str):
         comics_data["all_comics"].append(updated_comic_data)
 
     # 无论成功与否，都保存并广播数据，以确保前端UI同步
-    comics_data["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    comics_data["last_updated"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     save_data(comics_data)
     await manager.broadcast(json.dumps({"type": "data_updated", "data": comics_data}))
 
