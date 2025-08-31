@@ -232,11 +232,9 @@
         function formatUpdateTimes() {
             document.querySelectorAll('.update-time-bubble').forEach(bubble => {
                 const updateTimeStr = bubble.dataset.updatetime;
-                const previousFetchTimeStr = bubble.dataset.previousFetchTime;
                 const lastFetchTimeStr = bubble.dataset.lastFetchTime;
 
                 let updateTimeText = '';
-                let previousFetchTimeText = '';
                 let lastFetchTimeText = '';
 
                 const toLocale = (dateStr, options = {}) => {
@@ -254,24 +252,16 @@
                     updateTimeText = `更新于: ${formattedUpdateTime}`;
                 }
                 
-                const formattedPrevFetchTime = toLocale(previousFetchTimeStr);
-                if (formattedPrevFetchTime) {
-                    previousFetchTimeText = `上次正确更新于: ${formattedPrevFetchTime}`;
-                }
-
                 const formattedLastFetchTime = toLocale(lastFetchTimeStr);
                 if (formattedLastFetchTime) {
-                    lastFetchTimeText = `成功更新于: ${formattedLastFetchTime}`;
+                    lastFetchTimeText = `上次正确更新于: ${formattedLastFetchTime}`;
                 }
                 
-
                 // 决定初始显示内容
                 if (updateTimeText) {
                     bubble.textContent = updateTimeText;
                 } else if (lastFetchTimeText) {
                     bubble.textContent = lastFetchTimeText;
-                } else if (previousFetchTimeText) {
-                    bubble.textContent = previousFetchTimeText;
                 } else {
                     bubble.textContent = '从未更新';
                 }
@@ -279,7 +269,7 @@
 
 
                 // 如果有“上次正确获取时间”，则添加点击切换功能
-                if (previousFetchTimeText && updateTimeText) {
+                if (lastFetchTimeText && updateTimeText) {
                     bubble.classList.add('clickable');
                     bubble.setAttribute('data-showing', 'content-time'); 
                     
@@ -287,7 +277,7 @@
                         event.stopPropagation(); // 阻止事件冒泡到父元素(comic-card)
                         const isFailed = bubble.classList.contains('update-failed');
                         if (bubble.getAttribute('data-showing') === 'content-time') {
-                            bubble.textContent = previousFetchTimeText;
+                            bubble.textContent = lastFetchTimeText;
                             bubble.setAttribute('data-showing', 'fetch-time');
                         } else {
                             bubble.textContent = updateTimeText;
