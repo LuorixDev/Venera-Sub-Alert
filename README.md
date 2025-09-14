@@ -35,6 +35,8 @@
 
 请严格按照以下步骤在您的服务器上部署和配置本项目。
 
+注意：记得及时更新venera版本以保持webdav同步正确
+
 ### 步骤 1：部署本项目
 
 首先，将本项目克隆或下载到您的服务器上。然后，安装所需的 Python 依赖：
@@ -60,9 +62,7 @@ cp .env.example .env
 
 ### 步骤 3：引入 Venera 可执行文件
 
-由于Venera上游还未合并Pr,本项目会临时提供二进制文件，所以本步骤展示无需执行。
-
-将您最新版的 Venera Linux 可执行文件和其附带的 `data` 文件夹，一同放入项目根目录下的 `venera_core` 文件夹内。最终的目录结构应如下所示：
+将您最新版的 Venera Linux 可执行文件和其附带的 `data` `lib` 文件夹(`venera` 主项目 `release` 中的 `venera-x.x.x-151-x86_64.pkg.tar.zst` 压缩文件解压即可得到)，一同放入项目根目录下的 `venera_core` 文件夹内。最终的目录结构应如下所示：
 
 ```
 .
@@ -202,6 +202,21 @@ docker build -t venera-headless .
     # 完成后退出容器
     exit
     ```
+4. **引入 Venera 可执行文件**
+
+将您最新版的 Venera Linux 可执行文件和其附带的 `data` `lib` 文件夹(`venera` 主项目 `release` 中的 `venera-x.x.x-151-x86_64.pkg.tar.zst` 压缩文件解压即可得到)，一同放入项目根目录(就是挂载`workspace`的对应目录，在本项目教程中，使用的是 `$(pwd)` 即为执行命令的路径)下的 `venera_core` 文件夹内。最终的目录结构应如下所示：
+
+```
+.
+├── venera_core/
+│   ├── venera      <-- 这是您的 Venera 可执行文件
+│   ├── lib/
+│   └── data/
+├── app/
+├── static/
+├── templates/
+└── ... (其他项目文件)
+```
 
 ### 步骤 5：启动应用
 
