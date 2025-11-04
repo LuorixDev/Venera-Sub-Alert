@@ -62,7 +62,7 @@ cp .env.example .env
 
 ### 步骤 3：引入 Venera 可执行文件
 
-将您最新版的 Venera Linux 可执行文件和其附带的 `data` `lib` 文件夹(`venera` 主项目 `release` 中的 `venera-x.x.x-151-x86_64.pkg.tar.zst` 压缩文件解压即可得到)，一同放入项目根目录下的 `venera_core` 文件夹内。最终的目录结构应如下所示：
+将您最新版的 Venera Linux 可执行文件和其附带的 `data` `lib` 文件夹(`venera` 主项目 `release` 中的 `venera-x.x.x-151-x86_64.pkg.tar.zst` 压缩文件解压即可得到,在压缩包的`\usr\bin`下)，一同放入项目根目录下的 `venera_core` 文件夹内。最终的目录结构应如下所示：
 
 ```
 .
@@ -204,7 +204,7 @@ docker build -t venera-headless .
     ```
 4. **引入 Venera 可执行文件**
 
-将您最新版的 Venera Linux 可执行文件和其附带的 `data` `lib` 文件夹(`venera` 主项目 `release` 中的 `venera-x.x.x-151-x86_64.pkg.tar.zst` 压缩文件解压即可得到)，一同放入项目根目录(就是挂载`workspace`的对应目录，在本项目教程中，使用的是 `$(pwd)` 即为执行命令的路径)下的 `venera_core` 文件夹内。最终的目录结构应如下所示：
+将您最新版的 Venera Linux 可执行文件和其附带的 `data` `lib` 文件夹(`venera` 主项目 `release` 中的 `venera-x.x.x-151-x86_64.pkg.tar.zst` 压缩文件解压即可得到,在压缩包的`\usr\bin`下)，一同放入项目根目录(就是挂载`workspace`的对应目录，在本项目教程中，使用的是 `$(pwd)` 即为执行命令的路径)下的 `venera_core` 文件夹内。最终的目录结构应如下所示：
 
 ```
 .
